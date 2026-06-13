@@ -40,7 +40,6 @@ def enviar_telegram(mensaje):
 def limpiar_celda(texto):
     if not texto:
         return ""
-    # Reemplaza saltos de línea por un espacio limpio y quita espacios extra
     lineas = [l.strip() for l in texto.split("\n") if l.strip()]
     return " | ".join(lineas)
 
@@ -49,16 +48,13 @@ def procesar_pdf():
         return
 
     with pdfplumber.open("temp_gapgc.pdf") as pdf:
-        # El documento suele ser de una sola página, iteramos por si acaso
         for pagina in pdf.pages:
             tabla = pagina.extract_table()
             if not tabla:
                 continue
 
             for fila in tabla:
-                # Buscamos la fila de Enfermería (primera columna)
                 if fila[0] and "ATS/DUE" in fila[0]:
-                    # Mapeo estricto según orden físico de columnas detectado en image_c49b38.png
                     datos = {
                         "Ev_Corta_Ord": limpiar_celda(fila[1]),
                         "Ev_Corta_Disc": limpiar_celda(fila[2]),
@@ -73,7 +69,7 @@ def procesar_pdf():
                         "Curriculum_Ord": limpiar_celda(fila[13]) if len(fila) > 13 else ""
                     }
 
-                    # Creamos la cadena de control para el histórico
+                    # Cadena de control del estado actual
                     cadena_control = "#".join([f"{k}:{v}" for k, v in datos.items()])
 
                     estado_anterior = ""
@@ -84,24 +80,40 @@ def procesar_pdf():
                     if cadena_control != estado_anterior:
                         ahora = datetime.now().strftime("%d/%m/%Y - %H:%M")
                         
-                        # Construcción del reporte para Telegram
+                        # Diccionario para almacenar las líneas finales formateadas
+                        lineas_msg = {}
+
+                        # Evaluamos cada campo individualmente contra el historial
+                        for clave, valor in datos.items():
+                            texto_mostrar = valor or "Sin datos"
+                            marcador = ""
+                            
+                            # Si existía un estado anterior, verificamos si este campo específico ha mutado
+                            if estado_anterior:
+                                patron_campo = f"{clave}:{valor}"
+                                if patron_campo not in estado_anterior:
+                                    marcador = "⚠️ "
+                            
+                            lineas_msg[clave] = f"{marcador}`{texto_mostrar}`"
+
+                        # Construcción del reporte dinámico para Telegram
                         msg = (
                             f"🏥 *SCS: GAPGC (Atención Primaria GC)*\n"
                             f"📅 _Actualizado: {ahora}_\n"
                             f"📜 _Categoría: ATS/DUE (PDF Oficial)_\n\n"
                             f"📊 *Listas de Empleo SIGLE/SUPLE:*\n"
-                            f"• Eventual Corta Ord: `{datos['Ev_Corta_Ord'] or 'Sin datos'}`\n"
-                            f"• Eventual Corta Disc: `{datos['Ev_Corta_Disc'] or 'Sin datos'}`\n"
-                            f"• Eventual Larga Ord: `{datos['Ev_Larga_Ord'] or 'Sin datos'}`\n"
-                            f"• Eventual Larga Disc: `{datos['Ev_Larga_Disc'] or 'Sin datos'}`\n"
-                            f"• Sustitución Corta Ord: `{datos['Sust_Corta_Ord'] or 'Sin datos'}`\n"
-                            f"• Sustitución Corta Disc: `{datos['Sust_Corta_Disc'] or 'Sin datos'}`\n"
-                            f"• Sustitución Larga Ord: `{datos['Sust_Larga_Ord'] or 'Sin datos'}`\n"
-                            f"• Sustitución Larga Disc: `{datos['Sust_Larga_Disc'] or 'Sin datos'}`\n"
-                            f"• Interinidad Ord: `{datos['Interinidad_Ord'] or 'Sin datos'}`\n"
-                            f"• Interinidad Disc: `{datos['Interinidad_Disc'] or 'Sin datos'}`\n\n"
+                            f"• Eventual Corta Ord: {lineas_msg['Ev_Corta_Ord']}\n"
+                            f"• Eventual Corta Disc: {lineas_msg['Ev_Corta_Disc']}\n"
+                            f"• Eventual Larga Ord: {lineas_msg['Ev_Larga_Ord']}\n"
+                            f"• Eventual Larga Disc: {lineas_msg['Ev_Larga_Disc']}\n"
+                            f"• Sustitución Corta Ord: {lineas_msg['Sust_Corta_Ord']}\n"
+                            f"• Sustitución Corta Disc: {lineas_msg['Sust_Corta_Disc']}\n"
+                            f"• Sustitución Larga Ord: {lineas_msg['Sust_Larga_Ord']}\n"
+                            f"• Sustitución Larga Disc: {lineas_msg['Sust_Larga_Disc']}\n"
+                            f"• Interinidad Ord: {lineas_msg['Interinidad_Ord']}\n"
+                            f"• Interinidad Disc: {lineas_msg['Interinidad_Disc']}\n\n"
                             f"📋 *Listas de Contratación propias:*\n"
-                            f"• Currículum GAPGC Ord: `{datos['Curriculum_Ord'] or 'Sin datos'}`\n\n"
+                            f"• Currículum GAPGC Ord: {lineas_msg['Curriculum_Ord']}\n\n"
                             f"🔗 [Descargar PDF Oficial]({URL_PDF})"
                         )
                         
@@ -109,12 +121,11 @@ def procesar_pdf():
                         
                         with open(FICHERO_ESTADO, "w") as f:
                             f.write(cadena_control)
-                        print("✅ Cambios detectados y procesados para la GAPGC.")
+                        print("✅ Cambios detectados y procesados para la GAPGC con marcas de alerta.")
                     else:
                         print("ℹ️ GAPGC sin cambios desde la última verificación.")
                     return
 
-    # Limpieza del archivo temporal
     if os.path.exists("temp_gapgc.pdf"):
         os.remove("temp_gapgc.pdf")
 
