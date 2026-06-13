@@ -1,0 +1,39 @@
+name: Monitorización Enfermería SCS
+
+on:
+  schedule:
+    # Se ejecuta cada 15 minutos
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    # Permite activar el bot manualmente desde la interfaz de GitHub
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Descargar código del repositorio
+      uses: actions/checkout@v4
+
+    - name: Configurar entorno de Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Instalar dependencias necesarias
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: Ejecutar el script de scraping
+      env:
+        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      run: python tiempo_real_enfermeria.py
+
+    - name: Guardar estado para la siguiente ejecución
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add estado_enfermeria.json || true
+        git commit -m "🔄 Actualizar estado de cortes [Skip CI]" || true
+        git push || true
