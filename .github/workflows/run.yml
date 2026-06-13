@@ -5,7 +5,6 @@ on:
     - cron: '*/15 * * * *'
   workflow_dispatch:
 
-# Forzamos que el entorno use Node.js 24 globalmente para evitar el Warning
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
@@ -26,16 +25,22 @@ jobs:
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    - name: Ejecutar el script de scraping
+    - name: Ejecutar el script de scraping (Web General)
       env:
         TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       run: python tiempo_real_enfermeria.py
 
+    - name: Ejecutar el script de extracción (PDF GAPGC)
+      env:
+        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      run: python gapgc_enfermeria.py
+
     - name: Guardar estado para la siguiente ejecución
       run: |
         git config --local user.email "github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
-        git add estado_enf_*.txt || true
-        git commit -m "🔄 Actualizar estado de cortes [Skip CI]" || true
+        git add estado_enf_*.txt estado_gapgc.txt || true
+        git commit -m "🔄 Actualizar estados web y PDF [Skip CI]" || true
         git push || true
