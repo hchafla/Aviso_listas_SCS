@@ -2,10 +2,12 @@ name: Monitorización Enfermería SCS
 
 on:
   schedule:
-    # Se ejecuta cada 15 minutos de forma automática
     - cron: '*/15 * * * *'
   workflow_dispatch:
-    # Permite activar el bot manualmente desde la interfaz de GitHub
+
+# Forzamos que el entorno use Node.js 24 globalmente para evitar el Warning
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   run-bot:
