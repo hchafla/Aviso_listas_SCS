@@ -18,7 +18,7 @@ def descubrir():
         return
     vs_1 = input_vs.get("value")
     
-    # 2. Seleccionamos una gerencia cualquiera (ej: Dr. Negrín, valor 21) para que nos mande a la página de categorías
+    # 2. Seleccionamos una gerencia cualquiera (ej: Dr. Negrín, valor 21) para saltar a las categorías
     print("Simulando selección de Gerencia para cargar categorías...")
     payload_g = {
         "j_idt43": "j_idt43", 
@@ -42,10 +42,9 @@ def descubrir():
                 print(f"ID: {val} | Nombre: {texto}")
     else:
         print("\n❌ Error: No se localizó el elemento selector 'j_idt13:categoriasSOM_input'.")
-        # Imprimimos fragmento para auditar qué estructura devolvió en su lugar
         print("Estructura de inputs disponibles:")
         for inp in soup_cat.find_all("input"):
             print(f"Input encontrado -> Name: {inp.get('name')}, Type: {inp.get('type')}")
 
 if __name__ == "__main__":
-    discover()
+    descubrir()
