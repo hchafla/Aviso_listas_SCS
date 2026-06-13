@@ -3,14 +3,16 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
 
+# Configuración de variables desde los Secrets de GitHub
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 URL_BASE = "https://www3.gobiernodecanarias.org/sanidad/scs/ConsultaSIGLE/index.xhtml"
 URL_CAT = "https://www3.gobiernodecanarias.org/sanidad/scs/ConsultaSIGLE/categorias.xhtml"
 
-# ID de Categoría para Enfermero/a
-CATEGORIA_ENFERMERIA = "5"
+# ID real verificado para ATS/DUE (Enfermero/a)
+CATEGORIA_ENFERMERIA = "103"
 
+# Mapeo de gerencias: asocia el código del SCS, el nombre y su hilo de Telegram
 GERENCIAS_ENFERMERIA = [
     {"nombre": "Lanzarote", "valor": "22", "thread_id": 8},
     {"nombre": "Fuerteventura", "valor": "23", "thread_id": 9},
@@ -61,7 +63,7 @@ def procesar_gerencia(session, nombre, valor_gerencia, thread_id):
         }
         r_cat = session.post(URL_BASE, data=payload_g, timeout=15)
         
-        # 2. Selección de la Categoría
+        # 2. Selección de la Categoría ATS/DUE (103)
         vs_2 = extraer_view_state(r_cat.text)
         payload_c = {
             "j_idt13": "j_idt13", 
@@ -78,10 +80,6 @@ def procesar_gerencia(session, nombre, valor_gerencia, thread_id):
         print(f"[{nombre}] Filas válidas detectadas en la tabla: {len(filas)}")
         
         if len(filas) == 0:
-            print(f"⚠️ Alerta: No se extrajeron filas para {nombre}. Verificando si la página devolvió error...")
-            error_msg = soup.find(class_="ui-messages-error-detail")
-            if error_msg:
-                print(f"❌ Error detectado en la web del SCS: {error_msg.text.strip()}")
             return
 
         datos_actuales = ""
@@ -97,6 +95,7 @@ def procesar_gerencia(session, nombre, valor_gerencia, thread_id):
             info_linea = f"{celdas[0]}:{celdas[1]}-{celdas[2]}"
             datos_actuales += info_linea + "|"
 
+        # Si el estado de la gerencia ha cambiado o es la primera ejecución
         if datos_actuales != estado_ant:
             ahora = datetime.now()
             fecha_telegram = ahora.strftime("%d/%m/%Y - %H:%M")
@@ -116,7 +115,7 @@ def procesar_gerencia(session, nombre, valor_gerencia, thread_id):
 
             with open(fichero_estado, "w") as f: 
                 f.write(datos_actuales)
-            print(f"✅ Archivo {fichero_estado} generado con éxito.")
+            print(f"✅ Archivo {fichero_estado} actualizado en disco.")
             
             txt_ord = "\n".join(lineas_ord)
             txt_disc = "\n".join(lineas_disc)
@@ -124,7 +123,7 @@ def procesar_gerencia(session, nombre, valor_gerencia, thread_id):
             msg = (
                 f"🔄 *SCS: {nombre}*\n"
                 f"📅 _Actualizado: {fecha_telegram}_\n"
-                f"🏥 _Enfermero/a_\n\n"
+                f"🏥 _Enfermero/a (ATS/DUE)_\n\n"
                 f"📋 *Ordinarios:*\n{txt_ord}\n\n"
                 f"♿ *Discapacidad:*\n{txt_disc}\n\n"
                 f"🔗 [Ver en la web]({URL_BASE})"
