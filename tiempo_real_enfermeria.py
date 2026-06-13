@@ -3,16 +3,14 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
 
-# Configuración de variables desde los Secrets de GitHub
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 URL_BASE = "https://www3.gobiernodecanarias.org/sanidad/scs/ConsultaSIGLE/index.xhtml"
 URL_CAT = "https://www3.gobiernodecanarias.org/sanidad/scs/ConsultaSIGLE/categorias.xhtml"
 
-# ID de Categoría para Enfermero/a en el SCS
+# ID de Categoría para Enfermero/a
 CATEGORIA_ENFERMERIA = "5"
 
-# Mapeo de gerencias: asocia el código del SCS, el nombre y su hilo de Telegram
 GERENCIAS_ENFERMERIA = [
     {"nombre": "Lanzarote", "valor": "22", "thread_id": 8},
     {"nombre": "Fuerteventura", "valor": "23", "thread_id": 9},
@@ -63,7 +61,7 @@ def procesar_gerencia(session, nombre, valor_gerencia, thread_id):
         }
         r_cat = session.post(URL_BASE, data=payload_g, timeout=15)
         
-        # 2. Selección de la Categoría (Enfermería = 5)
+        # 2. Selección de la Categoría
         vs_2 = extraer_view_state(r_cat.text)
         payload_c = {
             "j_idt13": "j_idt13", 
@@ -77,6 +75,15 @@ def procesar_gerencia(session, nombre, valor_gerencia, thread_id):
         soup = BeautifulSoup(r_final.text, "html.parser")
         filas = [f for f in soup.find_all("tr") if len(f.find_all("td")) >= 3 and any(kw in f.get_text() for kw in ["Corta", "Larga", "Interinidad"])]
         
+        print(f"[{nombre}] Filas válidas detectadas en la tabla: {len(filas)}")
+        
+        if len(filas) == 0:
+            print(f"⚠️ Alerta: No se extrajeron filas para {nombre}. Verificando si la página devolvió error...")
+            error_msg = soup.find(class_="ui-messages-error-detail")
+            if error_msg:
+                print(f"❌ Error detectado en la web del SCS: {error_msg.text.strip()}")
+            return
+
         datos_actuales = ""
         lineas_ord, lineas_disc = [], []
         
@@ -85,13 +92,11 @@ def procesar_gerencia(session, nombre, valor_gerencia, thread_id):
             with open(fichero_estado, "r") as f: 
                 estado_ant = f.read().strip()
 
-        # Construir la cadena de control de estado
         for fila in filas:
             celdas = [c.get_text(strip=True) for c in fila.find_all("td")]
             info_linea = f"{celdas[0]}:{celdas[1]}-{celdas[2]}"
             datos_actuales += info_linea + "|"
 
-        # Si hay cambios respecto a la ejecución anterior
         if datos_actuales != estado_ant:
             ahora = datetime.now()
             fecha_telegram = ahora.strftime("%d/%m/%Y - %H:%M")
@@ -99,10 +104,8 @@ def procesar_gerencia(session, nombre, valor_gerencia, thread_id):
             for idx, fila in enumerate(filas):
                 celdas = [c.get_text(strip=True) for c in fila.find_all("td")]
                 info_linea = f"{celdas[0]}:{celdas[1]}-{celdas[2]}"
-                
                 texto_linea = f"  • {celdas[0]} ➔ Gerencia: `{celdas[1]}` | Global: `{celdas[2]}`"
                 
-                # Resaltar la línea si es un cambio real detectado
                 if estado_ant and (info_linea not in estado_ant):
                     texto_linea = f"⚠️ {texto_linea}"
                 
@@ -113,11 +116,11 @@ def procesar_gerencia(session, nombre, valor_gerencia, thread_id):
 
             with open(fichero_estado, "w") as f: 
                 f.write(datos_actuales)
+            print(f"✅ Archivo {fichero_estado} generado con éxito.")
             
             txt_ord = "\n".join(lineas_ord)
             txt_disc = "\n".join(lineas_disc)
             
-            # Construcción del mensaje final para el hilo específico
             msg = (
                 f"🔄 *SCS: {nombre}*\n"
                 f"📅 _Actualizado: {fecha_telegram}_\n"
@@ -126,10 +129,7 @@ def procesar_gerencia(session, nombre, valor_gerencia, thread_id):
                 f"♿ *Discapacidad:*\n{txt_disc}\n\n"
                 f"🔗 [Ver en la web]({URL_BASE})"
             )
-            
-            # Se envía única y exclusivamente al hilo asignado de este hospital
             enviar_telegram(msg, thread_id)
-            print(f"Alerta enviada correctamente al hilo de {nombre}")
             
     except Exception as e:
         print(f"Error procesando la gerencia de {nombre}: {e}")
@@ -137,7 +137,6 @@ def procesar_gerencia(session, nombre, valor_gerencia, thread_id):
 def main():
     session = requests.Session()
     session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-    
     for g in GERENCIAS_ENFERMERIA:
         procesar_gerencia(session, g['nombre'], g['valor'], g['thread_id'])
 
