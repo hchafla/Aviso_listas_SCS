@@ -1,40 +1,30 @@
 import os
 import requests
 from bs4 import BeautifulSoup
-import json
+from datetime import datetime
 
 # Configuración de variables desde los Secrets de GitHub
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+URL_BASE = "https://www3.gobiernodecanarias.org/sanidad/scs/ConsultaSIGLE/index.xhtml"
+URL_CAT = "https://www3.gobiernodecanarias.org/sanidad/scs/ConsultaSIGLE/categorias.xhtml"
 
-# Código interno del SCS para la categoría de Enfermero/a
-CATEGORIA_ENFERMERIA = "1"
+# ID de Categoría para Enfermero/a en el SCS
+CATEGORIA_ENFERMERIA = "5"
 
-# Diccionario que asocia el nombre exacto de la gerencia que devuelve la web con su ID de hilo de Telegram
-MAPEO_HILOS = {
-    "Dr. Negrín": 2,
-    "CHUIMI": 6,
-    "Atención Primaria Gran Canaria": 7,
-    "Lanzarote": 8,
-    "Fuerteventura": 9,
-    "Candelaria": 10,
-    "La Palma": 11,
-    "La Gomera": 12,
-    "El Hierro": 13,
-    "Atención Primaria Tenerife": 14
-}
-
-FILE_ESTADO = "estado_enfermeria.json"
-
-def cargar_estado_anterior():
-    if os.path.exists(FILE_ESTADO):
-        with open(FILE_ESTADO, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
-
-def guardar_estado_actual(estado):
-    with open(FILE_ESTADO, "w", encoding="utf-8") as f:
-        json.dump(estado, f, ensure_ascii=False, indent=4)
+# Mapeo de gerencias: asocia el código del SCS, el nombre y su hilo de Telegram
+GERENCIAS_ENFERMERIA = [
+    {"nombre": "Lanzarote", "valor": "22", "thread_id": 8},
+    {"nombre": "Fuerteventura", "valor": "23", "thread_id": 9},
+    {"nombre": "CHUIMI", "valor": "24", "thread_id": 6},
+    {"nombre": "Candelaria", "valor": "25", "thread_id": 10},
+    {"nombre": "La Palma", "valor": "26", "thread_id": 11},
+    {"nombre": "La Gomera", "valor": "27", "thread_id": 12},
+    {"nombre": "El Hierro", "valor": "28", "thread_id": 13},
+    {"nombre": "Atención Primaria Tenerife", "valor": "30", "thread_id": 14},
+    {"nombre": "Atención Primaria Gran Canaria", "valor": "20", "thread_id": 7},
+    {"nombre": "Dr. Negrín", "valor": "21", "thread_id": 2}
+]
 
 def enviar_telegram(mensaje, thread_id):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -42,110 +32,114 @@ def enviar_telegram(mensaje, thread_id):
         "chat_id": TELEGRAM_CHAT_ID,
         "text": mensaje,
         "parse_mode": "Markdown",
+        "disable_web_page_preview": True,
         "message_thread_id": thread_id
     }
     try:
-        response = requests.post(url, json=payload)
+        response = requests.post(url, json=payload, timeout=15)
         if response.status_code != 200:
-            print(f"Error enviando a Telegram (Hilo {thread_id}): {response.text}")
+            print(f"Error Telegram (Hilo {thread_id}): {response.text}")
     except Exception as e:
-        print(f"Excepción al enviar a Telegram: {e}")
+        print(f"Error enviando a Telegram: {e}")
 
-def raspar_enfermeria():
-    url = "https://www3.gobiernodecanarias.org/sanidad/scs/organica/gestion/index.jsp" # URL ficticia de la consulta del SCS
-    # Simulamos los datos del formulario necesarios para la petición POST
-    payload = {
-        "j_idt13:categoriasSOM_input": CATEGORIA_ENFERMERIA,
-        "j_idt13:enviar": "Consultar"
-    }
-    
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    }
-    
-    estado_actual = {}
-    
+def extraer_view_state(html):
+    soup = BeautifulSoup(html, "html.parser")
+    input_vs = soup.find("input", {"name": "javax.faces.ViewState"})
+    return input_vs.get("value") if input_vs else None
+
+def procesar_gerencia(session, nombre, valor_gerencia, thread_id):
+    fichero_estado = f"estado_enf_{valor_gerencia}.txt"
+
     try:
-        response = requests.post(url, data=payload, headers=headers, timeout=15)
-        if response.status_code != 200:
-            print(f"Error al acceder a la web del SCS: Código {response.status_code}")
-            return None
-            
-        soup = BeautifulSoup(response.text, "html.parser")
-        # Asumimos la estructura estándar de la tabla de resultados analizada previamente
-        tabla = soup.find("table", {"id": "tablaCortes"}) 
+        # 1. Petición a la Home y selección de Gerencia
+        r_home = session.get(URL_BASE, timeout=15)
+        vs_1 = extraer_view_state(r_home.text)
         
-        if not tabla:
-            print("No se encontró la tabla de cortes en la página.")
-            return None
-            
-        filas = tabla.find_all("tr")[1:] # Saltamos la cabecera
+        payload_g = {
+            "j_idt43": "j_idt43", 
+            "j_idt43:gerenciaUNSOM_input": valor_gerencia, 
+            "j_idt43:j_idt46": "Seleccionar", 
+            "javax.faces.ViewState": vs_1
+        }
+        r_cat = session.post(URL_BASE, data=payload_g, timeout=15)
+        
+        # 2. Selección de la Categoría (Enfermería = 5)
+        vs_2 = extraer_view_state(r_cat.text)
+        payload_c = {
+            "j_idt13": "j_idt13", 
+            "j_idt13:categoriasSOM_input": CATEGORIA_ENFERMERIA, 
+            "j_idt13:j_idt16": "Seleccionar", 
+            "javax.faces.ViewState": vs_2
+        }
+        r_final = session.post(URL_CAT, data=payload_c, timeout=15)
+        
+        # 3. Procesamiento de la tabla de resultados
+        soup = BeautifulSoup(r_final.text, "html.parser")
+        filas = [f for f in soup.find_all("tr") if len(f.find_all("td")) >= 3 and any(kw in f.get_text() for kw in ["Corta", "Larga", "Interinidad"])]
+        
+        datos_actuales = ""
+        lineas_ord, lineas_disc = [], []
+        
+        estado_ant = ""
+        if os.path.exists(fichero_estado):
+            with open(fichero_estado, "r") as f: 
+                estado_ant = f.read().strip()
+
+        # Construir la cadena de control de estado
         for fila in filas:
-            columnas = fila.find_all("td")
-            if len(columnas) >= 3:
-                gerencia = columnas[0].text.strip()
-                corte_gerencia = columnas[1].text.strip()
-                corte_global = columnas[2].text.strip()
+            celdas = [c.get_text(strip=True) for c in fila.find_all("td")]
+            info_linea = f"{celdas[0]}:{celdas[1]}-{celdas[2]}"
+            datos_actuales += info_linea + "|"
+
+        # Si hay cambios respecto a la ejecución anterior
+        if datos_actuales != estado_ant:
+            ahora = datetime.now()
+            fecha_telegram = ahora.strftime("%d/%m/%Y - %H:%M")
+
+            for idx, fila in enumerate(filas):
+                celdas = [c.get_text(strip=True) for c in fila.find_all("td")]
+                info_linea = f"{celdas[0]}:{celdas[1]}-{celdas[2]}"
                 
-                estado_actual[gerencia] = {
-                    "gerencia": corte_gerencia,
-                    "global": corte_global
-                }
-        return estado_actual
-    except Exception as e:
-        print(f"Error durante el raspado de datos: {e}")
-        return None
+                texto_linea = f"  • {celdas[0]} ➔ Gerencia: `{celdas[1]}` | Global: `{celdas[2]}`"
+                
+                # Resaltar la línea si es un cambio real detectado
+                if estado_ant and (info_linea not in estado_ant):
+                    texto_linea = f"⚠️ {texto_linea}"
+                
+                if idx < 3: 
+                    lineas_ord.append(texto_linea)
+                else: 
+                    lineas_disc.append(texto_linea)
 
-def procesar_alertas():
-    estado_anterior = cargar_estado_anterior()
-    estado_actual = raspar_enfermeria()
-    
-    if not estado_actual:
-        print("Proceso abortado por errores en el raspado.")
-        return
-
-    # Si es la primera ejecución del script, guardamos el estado y no enviamos alertas masivas
-    if not estado_anterior:
-        print("Primer registro de datos de Enfermería completado.")
-        guardar_estado_actual(estado_actual)
-        return
-
-    for gerencia, datos in estado_actual.items():
-        thread_id = MAPEO_HILOS.get(gerencia)
-        if not thread_id:
-            # Si la web devuelve una gerencia que no tenemos mapeada, saltamos para evitar fallos
-            continue
+            with open(fichero_estado, "w") as f: 
+                f.write(datos_actuales)
             
-        datos_antiguos = estado_anterior.get(gerencia)
-        
-        if not datos_antiguos:
-            # Nueva gerencia detectada que antes no estaba en la tabla
-            mensaje = (
-                f"🚨 *NUEVA GERENCIA DETECTADA: {gerencia}*\n\n"
-                f"📈 *Corte Gerencia:* {datos['gerencia']}\n"
-                f"🌍 *Corte Global:* {datos['global']}"
+            txt_ord = "\n".join(lineas_ord)
+            txt_disc = "\n".join(lineas_disc)
+            
+            # Construcción del mensaje final para el hilo específico
+            msg = (
+                f"🔄 *SCS: {nombre}*\n"
+                f"📅 _Actualizado: {fecha_telegram}_\n"
+                f"🏥 _Enfermero/a_\n\n"
+                f"📋 *Ordinarios:*\n{txt_ord}\n\n"
+                f"♿ *Discapacidad:*\n{txt_disc}\n\n"
+                f"🔗 [Ver en la web]({URL_BASE})"
             )
-            enviar_telegram(mensaje, thread_id)
-        else:
-            cambio_gerencia = datos['gerencia'] != datos_antiguos['gerencia']
-            cambio_global = datos['global'] != datos_antiguos['global']
             
-            if cambio_gerencia or cambio_global:
-                mensaje = f"🔄 *¡ACTUALIZACIÓN EN {gerencia.upper()}!*\n\n"
-                
-                if cambio_gerencia:
-                    mensaje += f"📉 *Corte Gerencia:* {datos_antiguos['gerencia']} ➔ `{datos['gerencia']}`\n"
-                else:
-                    mensaje += f"📉 *Corte Gerencia:* Mantienen `{datos['gerencia']}`\n"
-                    
-                if cambio_global:
-                    mensaje += f"🌍 *Corte Global:* {datos_antiguos['global']} ➔ `{datos['global']}`\n"
-                else:
-                    mensaje += f"🌍 *Corte Global:* Mantienen `{datos['global']}`\n"
-                
-                enviar_telegram(mensaje, thread_id)
+            # Se envía única y exclusivamente al hilo asignado de este hospital
+            enviar_telegram(msg, thread_id)
+            print(f"Alerta enviada correctamente al hilo de {nombre}")
+            
+    except Exception as e:
+        print(f"Error procesando la gerencia de {nombre}: {e}")
 
-    guardar_estado_actual(estado_actual)
+def main():
+    session = requests.Session()
+    session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+    
+    for g in GERENCIAS_ENFERMERIA:
+        procesar_gerencia(session, g['nombre'], g['valor'], g['thread_id'])
 
 if __name__ == "__main__":
-    procesar_alertas()
+    main()
