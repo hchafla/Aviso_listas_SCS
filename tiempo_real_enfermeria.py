@@ -18,7 +18,7 @@ GERENCIAS_ENFERMERIA = [
     {"nombre": "Fuerteventura", "valor": "23", "thread_id": 9},
     {"nombre": "CHUIMI", "valor": "24", "thread_id": 6},
     {"nombre": "Candelaria", "valor": "25", "thread_id": 10},
-    {"nombre": "La Palma", "valor": "26", "thread_id": 11},
+    {"nombre": "La Palma", "valor": "26", "thread_id": 47},
     {"nombre": "La Gomera", "valor": "27", "thread_id": 12},
     {"nombre": "El Hierro", "valor": "28", "thread_id": 13},
     {"nombre": "Atención Primaria Tenerife", "valor": "30", "thread_id": 14},
