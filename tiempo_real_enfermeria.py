@@ -2,6 +2,7 @@ import os
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
+from zoneinfo import ZoneInfo  # <- Forzar zona horaria nativa
 
 # Configuración de variables desde los Secrets de GitHub
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
@@ -97,7 +98,8 @@ def procesar_gerencia(session, nombre, valor_gerencia, thread_id):
 
         # Si el estado de la gerencia ha cambiado o es la primera ejecución
         if datos_actuales != estado_ant:
-            ahora = datetime.now()
+            # Forzamos el uso de la hora de Canarias explícitamente
+            ahora = datetime.now(ZoneInfo("Atlantic/Canary"))
             fecha_telegram = ahora.strftime("%d/%m/%Y - %H:%M")
 
             for idx, fila in enumerate(filas):
@@ -123,21 +125,4 @@ def procesar_gerencia(session, nombre, valor_gerencia, thread_id):
             msg = (
                 f"🔄 *SCS: {nombre}*\n"
                 f"📅 _Actualizado: {fecha_telegram}_\n"
-                f"🏥 _Enfermero/a (ATS/DUE)_\n\n"
-                f"📋 *Ordinarios:*\n{txt_ord}\n\n"
-                f"♿ *Discapacidad:*\n{txt_disc}\n\n"
-                f"🔗 [Ver en la web]({URL_BASE})"
-            )
-            enviar_telegram(msg, thread_id)
-            
-    except Exception as e:
-        print(f"Error procesando la gerencia de {nombre}: {e}")
-
-def main():
-    session = requests.Session()
-    session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-    for g in GERENCIAS_ENFERMERIA:
-        procesar_gerencia(session, g['nombre'], g['valor'], g['thread_id'])
-
-if __name__ == "__main__":
-    main()
+                f"🏥 _Enfermero/a (ATS/DUE)_\
