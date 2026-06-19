@@ -2,6 +2,7 @@ import os
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
+from zoneinfo import ZoneInfo  # <- Forzar zona horaria nativa
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
@@ -38,7 +39,7 @@ def enviar_telegram(mensaje, thread_id):
         if response.status_code != 200:
             print(f"Error Telegram TCAE (Hilo {thread_id}): {response.text}")
     except Exception as e:
-        print(f"Error enviando a Telegram TCAE: {e}")
+        print(f"Error sending to Telegram TCAE: {e}")
 
 def extraer_view_state(html):
     soup = BeautifulSoup(html, "html.parser")
@@ -91,7 +92,9 @@ def procesar_gerencia(session, nombre, valor_gerencia, thread_id):
             datos_actuales += info_linea + "|"
 
         if datos_actuales != estado_ant:
-            ahora = datetime.now().strftime("%d/%m/%Y - %H:%M")
+            # Forzamos explícitamente el huso horario de Canarias
+            ahora_dt = datetime.now(ZoneInfo("Atlantic/Canary"))
+            ahora = ahora_dt.strftime("%d/%m/%Y - %H:%M")
 
             for idx, fila in enumerate(filas):
                 celdas = [c.get_text(strip=True) for c in fila.find_all("td")]
