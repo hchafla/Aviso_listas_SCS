@@ -125,4 +125,22 @@ def procesar_gerencia(session, nombre, valor_gerencia, thread_id):
             msg = (
                 f"🔄 *SCS: {nombre}*\n"
                 f"📅 _Actualizado: {fecha_telegram}_\n"
-                f"🏥 _Enfermero/a (ATS/DUE)_\
+                f"🏥 _Enfermero/a (ATS/DUE)_\n\n"
+                f"📋 *Ordinarios:*\n{txt_ord}\n\n"
+                f"♿ *Discapacidad:*\n{txt_disc}\n\n"
+                f"🔗 [Ver en la web]({URL_BASE})"
+            )
+            enviar_telegram(msg, thread_id)
+            
+    except Exception as e:
+        print(f"Error procesando la gerencia de {nombre}: {e}")
+
+def main():
+    session = requests.Session()
+    session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+    for g in GERENCIAS_ENFERMERIA:
+        procesar_gerencia(session, g['nombre'], g['valor'], g['thread_id'])
+
+if __name__ == "__main__":
+    main()
+    
