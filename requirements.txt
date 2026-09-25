@@ -2,3 +2,5 @@ requests
 beautifulsoup4
 pdfplumber
 tzdata
+google-auth
+google-api-python-client
