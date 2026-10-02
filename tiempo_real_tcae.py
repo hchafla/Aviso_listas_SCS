@@ -16,7 +16,7 @@ URL_BASE = "https://www3.gobiernodecanarias.org/sanidad/scs/ConsultaSIGLE/index.
 URL_CAT = "https://www3.gobiernodecanarias.org/sanidad/scs/ConsultaSIGLE/categorias.xhtml"
 
 # Google Sheet exclusivo para TCAE
-SPREADSHEET_ID = "14dbpOOpwYk2VkUa2tDY48AGk2W3OAfa-AFqaC3ri62"
+SPREADSHEET_ID = "14dbpOOpwYk2VkUa2tDY48AGk2W3OAfa-AFqaC3ri62c"
 
 # ID oficial para Auxiliar de Enfermería (TCAE)
 CATEGORIA_TCAE = "98"
