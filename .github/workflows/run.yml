@@ -1,41 +1,55 @@
+
 name: Monitorización Enfermería SCS
 
 on:
-  schedule:
-    - cron: '*/15 * * * *'
   workflow_dispatch:
+
+concurrency:
+  group: monitorizacion-enfermeria-scs
+  cancel-in-progress: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   run-bot:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+
     steps:
-    - name: Descargar código del repositorio
-      uses: actions/checkout@v4
+      - name: Descargar código del repositorio
+        uses: actions/checkout@v4
 
-    - name: Configurar entorno de Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
+      - name: Configurar entorno de Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-    - name: Instalar dependencias necesarias
-      run: |
-        python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      - name: Instalar dependencias necesarias
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    - name: Ejecutar el script de scraping (Web General)
-      env:
-        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
-      run: python tiempo_real_enfermeria.py
+      - name: Ejecutar el script de scraping (Web General)
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          TZ: Atlantic/Canary
+        run: python tiempo_real_enfermeria.py
 
-    - name: Guardar estado para la siguiente ejecución
-      run: |
-        git config --local user.email "github-actions[bot]@users.noreply.github.com"
-        git config --local user.name "github-actions[bot]"
-        git add estado_enf_*.txt || true
-        git commit -m "🔄 Actualizar estados web [Skip CI]" || true
-        git push || true
+      - name: Subir HTML de depuración
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-html-enfermeria
+          path: debug_*.html
+          if-no-files-found: ignore
+
+      - name: Guardar estado
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add estado_enf_*.txt || true
+          git commit -m "Actualizar estados de enfermería [skip ci]" -a || true
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
+          git push || echo "::warning::El push de estado_enf_*.txt ha fallado; revisar manualmente si persiste"
